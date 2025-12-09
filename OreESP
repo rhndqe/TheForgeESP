@@ -17,7 +17,7 @@ local LocalPlayer = Players.LocalPlayer
 local Window = Library:CreateWindow({
     Title = "reiTF",
     Footer = "v2.1 + Teleport",
-    Icon = 128100494507150,
+    Icon = 420905023,
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -301,19 +301,46 @@ local function updateRockHealthLabel(rockModel)
         local hpText = rockHP.Text
         if not hpText or hpText == "" then return end
         
-        local cleanedHP = hpText:gsub("[^%d]", "")
+        -- Extract number dari format apapun dengan pattern matching yang lebih baik
+        -- Handle format: "1,234 HP", "HP: 1234", "1234", "20 HP", dll
+        local cleanedHP = hpText:gsub(",", ""):match("%d+")
         local currentHP = tonumber(cleanedHP)
         
-        if not currentHP or currentHP <= 0 or currentHP > maxHP then 
+        if not currentHP or currentHP <= 0 then 
+            print("⚠ Invalid HP detected:", hpText, "→ parsed as:", currentHP)
             return
+        end
+        
+        -- Debug log untuk troubleshooting
+        if currentHP == 20 then
+            print("⚠ WARNING: Detected 20 HP!")
+            print("   Original text:", hpText)
+            print("   Cleaned:", cleanedHP)
+            print("   MaxHP:", maxHP)
+            print("   Full descendants check:")
+            for _, desc in pairs(rockModel:GetDescendants()) do
+                if desc:IsA("TextLabel") then
+                    print("   - TextLabel found:", desc.Name, "=", desc.Text)
+                end
+            end
+        end
+        
+        -- Update maxHP jika currentHP lebih besar (untuk handle initial detection yang salah)
+        if currentHP > maxHP then
+            maxHP = currentHP
+            rockModel:SetAttribute("MaxHP", maxHP)
+            print("✓ Updated MaxHP to:", maxHP, "from current:", currentHP)
         end
         
         local healthColor = getHealthColor(currentHP, maxHP)
         local healthPercentage = math.clamp((currentHP / maxHP), 0, 1)
         
+        -- Format HP dengan comma separator
         local formattedHP = tostring(currentHP)
         if currentHP >= 1000 then
-            formattedHP = string.format("%d,%03d", math.floor(currentHP / 1000), currentHP % 1000)
+            formattedHP = string.format("%s,%03d", 
+                tostring(math.floor(currentHP / 1000)), 
+                currentHP % 1000)
         end
         
         local hpLabel = mainFrame:FindFirstChild("HPLabel")
@@ -325,15 +352,25 @@ local function updateRockHealthLabel(rockModel)
         if barBg then
             local healthBar = barBg:FindFirstChild("HealthBar")
             if healthBar then
-                healthBar.Size = UDim2.new(healthPercentage, 0, 1, 0)
-                healthBar.BackgroundColor3 = healthColor
+                -- Use TweenService untuk smooth transition (anti-blinking)
+                local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                local tween = TweenService:Create(healthBar, tweenInfo, {
+                    Size = UDim2.new(healthPercentage, 0, 1, 0),
+                    BackgroundColor3 = healthColor
+                })
+                tween:Play()
             end
         end
         
         local highlight = rockModel:FindFirstChild("ESPHighlight")
         if highlight then
-            highlight.FillColor = healthColor
-            highlight.OutlineColor = healthColor
+            -- Smooth color transition untuk highlight juga
+            local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(highlight, tweenInfo, {
+                FillColor = healthColor,
+                OutlineColor = healthColor
+            })
+            tween:Play()
         end
     end)
 end
@@ -366,22 +403,18 @@ local function monitorRockHP(rockModel)
         
         -- Monitor text changes untuk update real-time
         local lastHP = rockHP.Text
+        local isUpdating = false -- Prevent multiple simultaneous updates
+        
         local textConnection = rockHP:GetPropertyChangedSignal("Text"):Connect(function()
-            if rockHP.Text ~= lastHP then
+            if rockHP.Text ~= lastHP and not isUpdating then
+                isUpdating = true
                 lastHP = rockHP.Text
                 updateRockHealthLabel(rockModel)
+                task.wait(0.05) -- Small debounce
+                isUpdating = false
             end
         end)
         table.insert(connections, textConnection)
-        
-        -- Backup: Update setiap 0.1 detik untuk memastikan
-        local updateLoop = task.spawn(function()
-            while rockModel and rockModel.Parent and rockModel:GetAttribute("MaxHP") do
-                updateRockHealthLabel(rockModel)
-                task.wait(0.1)
-            end
-        end)
-        table.insert(connections, updateLoop)
         
         -- Store connections untuk cleanup nanti
         RockMonitorConnections[rockModel] = connections
@@ -487,24 +520,35 @@ local function applyRockESP(rockModel)
         if string.find(string.lower(rockName), string.lower(rockType)) then
             if config.enabled then
                 local maxHP = nil
+                local rockHPLabel = nil
                 local attempts = 0
                 
-                -- Search untuk rockHP dengan lebih dalam
-                while attempts < 20 and not maxHP do
-                    task.wait(0.1)
+                -- Search untuk rockHP dengan lebih dalam dan store reference
+                while attempts < 40 and not maxHP do -- Increased attempts to 40
+                    task.wait(0.2) -- Longer wait between attempts
                     attempts = attempts + 1
                     
                     -- Cari rockHP di semua descendants
                     for _, descendant in pairs(rockModel:GetDescendants()) do
                         if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
+                            rockHPLabel = descendant
                             local hpText = descendant.Text
+                            
                             if hpText and hpText ~= "" then
-                                local cleanedHP = hpText:gsub("[^%d]", "")
+                                -- Extract number lebih robust - handle berbagai format
+                                local cleanedHP = hpText:gsub(",", ""):gsub("HP", ""):gsub(":", ""):gsub("%s", ""):match("%d+")
                                 local parsedHP = tonumber(cleanedHP)
                                 
-                                if parsedHP and parsedHP >= 100 and parsedHP <= 10000 then
+                                -- Lebih permissive range untuk catch semua HP values
+                                if parsedHP and parsedHP >= 10 and parsedHP <= 100000 then
                                     maxHP = parsedHP
+                                    print("✓ Found rock HP:", parsedHP, "for", rockType, "from text:", hpText)
                                     break
+                                else
+                                    -- Debug output untuk troubleshooting
+                                    if parsedHP then
+                                        print("⚠ HP out of range:", parsedHP, "from text:", hpText)
+                                    end
                                 end
                             end
                         end
@@ -513,6 +557,7 @@ local function applyRockESP(rockModel)
                     if maxHP then break end
                 end
                 
+                -- Fallback values jika tidak ketemu
                 if not maxHP then
                     if string.find(string.lower(rockName), "volcanic") then
                         maxHP = 4500
@@ -523,9 +568,15 @@ local function applyRockESP(rockModel)
                     else
                         maxHP = 750
                     end
+                    print("⚠ Using fallback HP:", maxHP, "for", rockType)
                 end
                 
                 rockModel:SetAttribute("MaxHP", maxHP)
+                
+                -- Store rockHP label reference untuk monitoring yang lebih akurat
+                if rockHPLabel then
+                    rockModel:SetAttribute("RockHPLabel", rockHPLabel)
+                end
                 
                 createHighlight(rockModel, Color3.fromRGB(0, 255, 0))
                 createRockLabel(rockModel, rockType, maxHP, maxHP)
@@ -793,6 +844,45 @@ local PlayerListGroup = Tabs.PlayerESP:AddRightGroupbox("Player List (Multi-Sele
 PlayerListGroup:AddLabel("Select players to ESP:", true)
 PlayerListGroup:AddDivider()
 
+-- Add "All Players" toggle at the top
+PlayerListGroup:AddToggle("PlayerESP_AllPlayers", {
+    Text = "ALL PLAYERS",
+    Default = false,
+    Callback = function(Value)
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local toggleName = "PlayerESP_" .. player.Name
+                if Toggles[toggleName] then
+                    Toggles[toggleName]:SetValue(Value)
+                end
+                
+                if Value then
+                    if not table.find(SelectedPlayers, player) then
+                        table.insert(SelectedPlayers, player)
+                    end
+                    applyPlayerESP(player)
+                else
+                    for i, p in pairs(SelectedPlayers) do
+                        if p == player then
+                            table.remove(SelectedPlayers, i)
+                            break
+                        end
+                    end
+                    removePlayerESP(player)
+                end
+            end
+        end
+        
+        if Value then
+            Library:Notify("ESP enabled for all players!", 2)
+        else
+            Library:Notify("ESP disabled for all players!", 2)
+        end
+    end
+})
+
+PlayerListGroup:AddDivider()
+
 -- Function to update player checkboxes
 local function refreshPlayerCheckboxes()
     -- Clear existing checkboxes by recreating the groupbox
@@ -823,6 +913,11 @@ local function refreshPlayerCheckboxes()
                             end
                             removePlayerESP(player)
                             Library:Notify("ESP disabled for " .. player.Name, 2)
+                            
+                            -- Turn off "All Players" if any individual is unchecked
+                            if Toggles.PlayerESP_AllPlayers and Toggles.PlayerESP_AllPlayers.Value then
+                                Toggles.PlayerESP_AllPlayers:SetValue(false)
+                            end
                         end
                     end
                 })
@@ -839,25 +934,8 @@ PlayerSection:AddDivider()
 PlayerSection:AddButton({
     Text = "Enable ESP for All Players",
     Func = function()
-        local count = 0
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local toggleName = "PlayerESP_" .. player.Name
-                if Toggles[toggleName] then
-                    Toggles[toggleName]:SetValue(true)
-                end
-                applyPlayerESP(player)
-                if not table.find(SelectedPlayers, player) then
-                    table.insert(SelectedPlayers, player)
-                end
-                count = count + 1
-            end
-        end
-        
-        if count > 0 then
-            Library:Notify("ESP enabled for all players (" .. count .. ")", 3)
-        else
-            Library:Notify("No other players found!", 2)
+        if Toggles.PlayerESP_AllPlayers then
+            Toggles.PlayerESP_AllPlayers:SetValue(true)
         end
     end,
     Tooltip = "Enable ESP for everyone in the server"
@@ -866,18 +944,9 @@ PlayerSection:AddButton({
 PlayerSection:AddButton({
     Text = "Disable All Player ESP",
     Func = function()
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local toggleName = "PlayerESP_" .. player.Name
-                if Toggles[toggleName] then
-                    Toggles[toggleName]:SetValue(false)
-                end
-                removePlayerESP(player)
-            end
+        if Toggles.PlayerESP_AllPlayers then
+            Toggles.PlayerESP_AllPlayers:SetValue(false)
         end
-        
-        SelectedPlayers = {}
-        Library:Notify("All player ESP disabled!", 2)
     end,
     Tooltip = "Disable ESP for all players"
 })
@@ -886,6 +955,14 @@ PlayerSection:AddButton({
 Players.PlayerAdded:Connect(function(player)
     task.wait(1)
     refreshPlayerCheckboxes()
+    
+    -- Auto-enable ESP if "All Players" is on
+    if Toggles.PlayerESP_AllPlayers and Toggles.PlayerESP_AllPlayers.Value then
+        local toggleName = "PlayerESP_" .. player.Name
+        if Toggles[toggleName] then
+            Toggles[toggleName]:SetValue(true)
+        end
+    end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
