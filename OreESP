@@ -45,6 +45,7 @@ local ProcessedOres = {}
 local PlayerESP = {}
 local SelectedPlayers = {} -- Changed to table for multiple players
 local RockMonitorConnections = {} -- Store connections for cleanup
+local RockData = {} -- Store individual rock data including HP
 
 -- Teleport Configuration
 local TeleportConfig = {
@@ -277,6 +278,14 @@ end
 
 -- Function untuk update rock health label (REAL-TIME)
 local function updateRockHealthLabel(rockModel)
+    local rockId = rockModel:GetFullName()
+    local rockInfo = RockData[rockId]
+    
+    if not rockInfo then
+        print("⚠ Rock data not found for:", rockId)
+        return
+    end
+    
     local success = pcall(function()
         local billboardGui = rockModel:FindFirstChild("ESPLabel")
         if not billboardGui then return end
@@ -284,52 +293,19 @@ local function updateRockHealthLabel(rockModel)
         local mainFrame = billboardGui:FindFirstChild("MainFrame")
         if not mainFrame then return end
         
-        local maxHP = rockModel:GetAttribute("MaxHP")
-        if not maxHP then return end
+        local currentHP = rockInfo.currentHP
+        local maxHP = rockInfo.maxHP
         
-        -- Find rockHP dengan search yang lebih dalam
-        local rockHP = nil
-        for _, descendant in pairs(rockModel:GetDescendants()) do
-            if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
-                rockHP = descendant
-                break
-            end
-        end
-        
-        if not rockHP then return end
-        
-        local hpText = rockHP.Text
-        if not hpText or hpText == "" then return end
-        
-        -- Extract number dari format apapun dengan pattern matching yang lebih baik
-        -- Handle format: "1,234 HP", "HP: 1234", "1234", "20 HP", dll
-        local cleanedHP = hpText:gsub(",", ""):match("%d+")
-        local currentHP = tonumber(cleanedHP)
-        
-        if not currentHP or currentHP <= 0 then 
-            print("⚠ Invalid HP detected:", hpText, "→ parsed as:", currentHP)
+        if not currentHP or not maxHP or maxHP <= 0 then
+            print("⚠ Invalid HP values for", rockId, "| Current:", currentHP, "Max:", maxHP)
             return
         end
         
-        -- Debug log untuk troubleshooting
-        if currentHP == 20 then
-            print("⚠ WARNING: Detected 20 HP!")
-            print("   Original text:", hpText)
-            print("   Cleaned:", cleanedHP)
-            print("   MaxHP:", maxHP)
-            print("   Full descendants check:")
-            for _, desc in pairs(rockModel:GetDescendants()) do
-                if desc:IsA("TextLabel") then
-                    print("   - TextLabel found:", desc.Name, "=", desc.Text)
-                end
-            end
-        end
-        
-        -- Update maxHP jika currentHP lebih besar (untuk handle initial detection yang salah)
+        -- Update current HP if it exceeds max HP
         if currentHP > maxHP then
             maxHP = currentHP
-            rockModel:SetAttribute("MaxHP", maxHP)
-            print("✓ Updated MaxHP to:", maxHP, "from current:", currentHP)
+            rockInfo.maxHP = maxHP
+            print("✓ Updated MaxHP to:", maxHP, "for", rockId)
         end
         
         local healthColor = getHealthColor(currentHP, maxHP)
@@ -373,65 +349,154 @@ local function updateRockHealthLabel(rockModel)
             tween:Play()
         end
     end)
+    
+    if not success then
+        print("❌ Error updating rock label for:", rockId)
+    end
+end
+
+-- Function untuk mendapatkan HP dari TextLabel rockHP
+local function getRockHPFromLabel(rockModel)
+    local rockHPLabel = nil
+    
+    -- Cari rockHP di semua descendants
+    for _, descendant in pairs(rockModel:GetDescendants()) do
+        if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
+            rockHPLabel = descendant
+            break
+        end
+    end
+    
+    if not rockHPLabel then
+        print("⚠ No rockHP label found for:", rockModel:GetFullName())
+        return nil
+    end
+    
+    local hpText = rockHPLabel.Text
+    if not hpText or hpText == "" then
+        print("⚠ Empty rockHP text for:", rockModel:GetFullName())
+        return nil
+    end
+    
+    -- Extract number dari format apapun dengan pattern matching yang lebih baik
+    -- Handle format: "1,234 HP", "HP: 1234", "1234", "20 HP", dll
+    local cleanedHP = hpText:gsub(",", ""):match("%d+")
+    local currentHP = tonumber(cleanedHP)
+    
+    if not currentHP or currentHP <= 0 then
+        print("⚠ Invalid HP parsed:", hpText, "→", currentHP, "for", rockModel:GetFullName())
+        return nil
+    end
+    
+    return {
+        label = rockHPLabel,
+        currentHP = currentHP
+    }
 end
 
 -- Function untuk monitor rock HP changes secara real-time
 local function monitorRockHP(rockModel)
+    local rockId = rockModel:GetFullName()
+    
     -- Disconnect any existing connections for this rock
-    if RockMonitorConnections[rockModel] then
-        for _, connection in pairs(RockMonitorConnections[rockModel]) do
+    if RockMonitorConnections[rockId] then
+        for _, connection in pairs(RockMonitorConnections[rockId]) do
             if connection and connection.Connected then
                 connection:Disconnect()
             end
         end
-        RockMonitorConnections[rockModel] = nil
+        RockMonitorConnections[rockId] = nil
     end
     
+    -- Initialize rock data jika belum ada
+    if not RockData[rockId] then
+        RockData[rockId] = {
+            rockModel = rockModel,
+            maxHP = 0,
+            currentHP = 0,
+            rockType = nil
+        }
+    end
+    
+    local rockInfo = RockData[rockId]
     local connections = {}
     
     task.spawn(function()
-        -- Find rockHP dengan search yang lebih dalam
-        local rockHP = nil
-        for _, descendant in pairs(rockModel:GetDescendants()) do
-            if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
-                rockHP = descendant
-                break
+        local attempts = 0
+        local rockHPLabel = nil
+        
+        -- Tunggu hingga rockHP label muncul
+        while attempts < 20 and not rockHPLabel do
+            local hpData = getRockHPFromLabel(rockModel)
+            if hpData then
+                rockHPLabel = hpData.label
+                rockInfo.currentHP = hpData.currentHP
+                rockInfo.maxHP = hpData.currentHP  -- Set maxHP sama dengan currentHP awal
+            else
+                task.wait(0.5)
+                attempts = attempts + 1
             end
         end
         
-        if not rockHP then return end
+        if not rockHPLabel then
+            print("❌ Failed to find rockHP label for:", rockId)
+            return
+        end
+        
+        print("✓ Monitoring rockHP for:", rockId, "| Initial HP:", rockInfo.currentHP)
         
         -- Monitor text changes untuk update real-time
-        local lastHP = rockHP.Text
-        local isUpdating = false -- Prevent multiple simultaneous updates
+        local isUpdating = false
         
-        local textConnection = rockHP:GetPropertyChangedSignal("Text"):Connect(function()
-            if rockHP.Text ~= lastHP and not isUpdating then
+        local textConnection = rockHPLabel:GetPropertyChangedSignal("Text"):Connect(function()
+            if not isUpdating then
                 isUpdating = true
-                lastHP = rockHP.Text
-                updateRockHealthLabel(rockModel)
+                
+                -- Dapatkan HP terbaru
+                local hpData = getRockHPFromLabel(rockModel)
+                if hpData then
+                    local oldHP = rockInfo.currentHP
+                    rockInfo.currentHP = hpData.currentHP
+                    
+                    -- Update maxHP jika currentHP lebih besar
+                    if hpData.currentHP > rockInfo.maxHP then
+                        rockInfo.maxHP = hpData.currentHP
+                        print("✓ Updated maxHP to:", rockInfo.maxHP, "for", rockId)
+                    end
+                    
+                    -- Update ESP
+                    updateRockHealthLabel(rockModel)
+                    
+                    -- Debug log untuk perubahan HP
+                    if oldHP ~= hpData.currentHP then
+                        print("🔁 HP Changed for", rockId, "|", oldHP, "→", hpData.currentHP)
+                    end
+                end
+                
                 task.wait(0.05) -- Small debounce
                 isUpdating = false
             end
         end)
+        
         table.insert(connections, textConnection)
         
         -- Store connections untuk cleanup nanti
-        RockMonitorConnections[rockModel] = connections
+        RockMonitorConnections[rockId] = connections
         
         -- Cleanup saat rock destroyed
         rockModel.AncestryChanged:Connect(function()
             if not rockModel.Parent then
-                if RockMonitorConnections[rockModel] then
-                    for _, conn in pairs(RockMonitorConnections[rockModel]) do
+                if RockMonitorConnections[rockId] then
+                    for _, conn in pairs(RockMonitorConnections[rockId]) do
                         if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
                             conn:Disconnect()
-                        elseif typeof(conn) == "thread" then
-                            task.cancel(conn)
                         end
                     end
-                    RockMonitorConnections[rockModel] = nil
+                    RockMonitorConnections[rockId] = nil
                 end
+                
+                -- Clean up rock data
+                RockData[rockId] = nil
             end
         end)
     end)
@@ -439,6 +504,8 @@ end
 
 -- Function untuk remove ESP
 local function removeESP(obj)
+    local objId = obj:GetFullName()
+    
     pcall(function()
         if obj and obj.Parent then
             -- Remove visual elements
@@ -450,19 +517,17 @@ local function removeESP(obj)
             end
             
             -- Disconnect monitoring connections
-            if RockMonitorConnections[obj] then
-                for _, conn in pairs(RockMonitorConnections[obj]) do
+            if RockMonitorConnections[objId] then
+                for _, conn in pairs(RockMonitorConnections[objId]) do
                     if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
                         conn:Disconnect()
-                    elseif typeof(conn) == "thread" then
-                        task.cancel(conn)
                     end
                 end
-                RockMonitorConnections[obj] = nil
+                RockMonitorConnections[objId] = nil
             end
             
-            -- Remove attribute
-            obj:SetAttribute("MaxHP", nil)
+            -- Remove rock data
+            RockData[objId] = nil
         end
     end)
 end
@@ -514,80 +579,82 @@ end
 local function applyRockESP(rockModel)
     if not rockModel or not rockModel.Parent then return end
     
+    local rockId = rockModel:GetFullName()
     local rockName = rockModel.Name
+    
+    -- Skip jika sudah ada ESP untuk rock ini
+    if RockData[rockId] then
+        print("⚠ Rock already has ESP:", rockId)
+        return
+    end
+    
+    local foundRockType = nil
     
     for rockType, config in pairs(RockConfig) do
         if string.find(string.lower(rockName), string.lower(rockType)) then
+            foundRockType = rockType
             if config.enabled then
-                local maxHP = nil
-                local rockHPLabel = nil
-                local attempts = 0
+                print("✓ Applying ESP to rock:", rockId, "| Type:", rockType)
                 
-                -- Search untuk rockHP dengan lebih dalam dan store reference
-                while attempts < 40 and not maxHP do -- Increased attempts to 40
-                    task.wait(0.2) -- Longer wait between attempts
-                    attempts = attempts + 1
-                    
-                    -- Cari rockHP di semua descendants
-                    for _, descendant in pairs(rockModel:GetDescendants()) do
-                        if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
-                            rockHPLabel = descendant
-                            local hpText = descendant.Text
-                            
-                            if hpText and hpText ~= "" then
-                                -- Extract number lebih robust - handle berbagai format
-                                local cleanedHP = hpText:gsub(",", ""):gsub("HP", ""):gsub(":", ""):gsub("%s", ""):match("%d+")
-                                local parsedHP = tonumber(cleanedHP)
-                                
-                                -- Lebih permissive range untuk catch semua HP values
-                                if parsedHP and parsedHP >= 10 and parsedHP <= 100000 then
-                                    maxHP = parsedHP
-                                    print("✓ Found rock HP:", parsedHP, "for", rockType, "from text:", hpText)
-                                    break
-                                else
-                                    -- Debug output untuk troubleshooting
-                                    if parsedHP then
-                                        print("⚠ HP out of range:", parsedHP, "from text:", hpText)
-                                    end
-                                end
-                            end
+                -- Initialize rock data
+                RockData[rockId] = {
+                    rockModel = rockModel,
+                    maxHP = 0,
+                    currentHP = 0,
+                    rockType = rockType
+                }
+                
+                local rockInfo = RockData[rockId]
+                
+                -- Coba dapatkan HP awal
+                task.spawn(function()
+                    local attempts = 0
+                    while attempts < 10 do
+                        local hpData = getRockHPFromLabel(rockModel)
+                        if hpData then
+                            rockInfo.currentHP = hpData.currentHP
+                            rockInfo.maxHP = hpData.currentHP
+                            print("✓ Initial HP for", rockId, ":", hpData.currentHP)
+                            break
                         end
+                        task.wait(0.5)
+                        attempts = attempts + 1
                     end
                     
-                    if maxHP then break end
-                end
-                
-                -- Fallback values jika tidak ketemu
-                if not maxHP then
-                    if string.find(string.lower(rockName), "volcanic") then
-                        maxHP = 4500
-                    elseif string.find(string.lower(rockName), "core") then
-                        maxHP = 1500
-                    elseif string.find(string.lower(rockName), "vein") then
-                        maxHP = 1000
-                    else
-                        maxHP = 750
+                    -- Jika tidak dapat HP, gunakan fallback berdasarkan tipe
+                    if rockInfo.currentHP == 0 then
+                        if string.find(string.lower(rockName), "volcanic") then
+                            rockInfo.maxHP = 4500
+                            rockInfo.currentHP = 4500
+                        elseif string.find(string.lower(rockName), "core") then
+                            rockInfo.maxHP = 1500
+                            rockInfo.currentHP = 1500
+                        elseif string.find(string.lower(rockName), "vein") then
+                            rockInfo.maxHP = 1000
+                            rockInfo.currentHP = 1000
+                        else
+                            rockInfo.maxHP = 750
+                            rockInfo.currentHP = 750
+                        end
+                        print("⚠ Using fallback HP for", rockId, ":", rockInfo.currentHP)
                     end
-                    print("⚠ Using fallback HP:", maxHP, "for", rockType)
-                end
-                
-                rockModel:SetAttribute("MaxHP", maxHP)
-                
-                -- Store rockHP label reference untuk monitoring yang lebih akurat
-                if rockHPLabel then
-                    rockModel:SetAttribute("RockHPLabel", rockHPLabel)
-                end
-                
-                createHighlight(rockModel, Color3.fromRGB(0, 255, 0))
-                createRockLabel(rockModel, rockType, maxHP, maxHP)
-                
-                table.insert(ESPObjects, rockModel)
-                
-                -- Start real-time HP monitoring
-                monitorRockHP(rockModel)
+                    
+                    -- Apply visual ESP
+                    createHighlight(rockModel, Color3.fromRGB(0, 255, 0))
+                    createRockLabel(rockModel, rockType, rockInfo.currentHP, rockInfo.maxHP)
+                    
+                    table.insert(ESPObjects, rockModel)
+                    
+                    -- Start real-time HP monitoring
+                    monitorRockHP(rockModel)
+                end)
             end
             break
         end
+    end
+    
+    if not foundRockType then
+        print("⚠ Unknown rock type:", rockName, "| ID:", rockId)
     end
 end
 
@@ -664,66 +731,81 @@ local function removePlayerESP(player)
     end
 end
 
--- Function untuk setup player hit detection
-local function setupPlayerHitDetection()
+-- Function untuk setup rock detection
+local function setupRockDetection()
     local rocksFolder = Workspace:FindFirstChild("Rocks")
-    if not rocksFolder then return end
+    if not rocksFolder then 
+        print("⚠ Rocks folder not found!")
+        return 
+    end
     
-    for _, folder in pairs(rocksFolder:GetDescendants()) do
-        if folder:IsA("Model") and (
-            string.find(folder.Name, "Basalt") or 
-            string.find(folder.Name, "Volcanic")
+    print("✓ Setting up rock detection...")
+    
+    -- Scan rocks yang sudah ada
+    for _, rock in pairs(rocksFolder:GetDescendants()) do
+        if rock:IsA("Model") and (
+            string.find(rock.Name, "Basalt") or 
+            string.find(rock.Name, "Volcanic")
         ) then
-            applyRockESP(folder)
+            task.spawn(function()
+                applyRockESP(rock)
+            end)
+        end
+    end
+    
+    -- Monitor rocks baru
+    rocksFolder.DescendantAdded:Connect(function(descendant)
+        if descendant:IsA("Model") and (
+            string.find(descendant.Name, "Basalt") or 
+            string.find(descendant.Name, "Volcanic")
+        ) then
+            task.wait(0.5) -- Tunggu sebentar untuk model fully loaded
+            applyRockESP(descendant)
             
-            folder.ChildAdded:Connect(function(child)
+            -- Monitor ore yang muncul di dalam rock
+            descendant.ChildAdded:Connect(function(child)
                 if child:IsA("Model") and child.Name == "Ore" then
                     task.wait(0.2)
                     applyOreESP(child)
                 end
             end)
         end
-    end
-    
-    rocksFolder.DescendantAdded:Connect(function(descendant)
-        if descendant:IsA("Model") then
-            task.wait(0.2)
-            
-            if string.find(descendant.Name, "Basalt") or string.find(descendant.Name, "Volcanic") then
-                applyRockESP(descendant)
-                
-                descendant.ChildAdded:Connect(function(child)
-                    if child:IsA("Model") and child.Name == "Ore" then
-                        task.wait(0.2)
-                        applyOreESP(child)
-                    end
-                end)
-            end
-        end
     end)
 end
 
 -- Function untuk clear all ESP
 local function clearAllESP()
-    for _, obj in pairs(ESPObjects) do
-        removeESP(obj)
+    -- Clear rock ESP
+    for rockId, rockInfo in pairs(RockData) do
+        if rockInfo.rockModel and rockInfo.rockModel.Parent then
+            removeESP(rockInfo.rockModel)
+        end
     end
+    
+    -- Clear ore ESP
+    for oreModel, _ in pairs(ProcessedOres) do
+        if oreModel and oreModel.Parent then
+            removeESP(oreModel)
+        end
+    end
+    
+    -- Clear arrays
     ESPObjects = {}
     ProcessedOres = {}
+    RockData = {}
     
     -- Clear all rock monitor connections
-    for rock, connections in pairs(RockMonitorConnections) do
+    for rockId, connections in pairs(RockMonitorConnections) do
         for _, conn in pairs(connections) do
             if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
                 conn:Disconnect()
-            elseif typeof(conn) == "thread" then
-                task.cancel(conn)
             end
         end
     end
     RockMonitorConnections = {}
     
     Library:Notify("All ESP cleared!", 2)
+    print("✓ All ESP cleared")
 end
 
 -- ============= UI CREATION =============
@@ -772,7 +854,13 @@ RockSection:AddToggle("Rock_BasaltRock", {
         if rocksFolder then
             for _, rock in pairs(rocksFolder:GetDescendants()) do
                 if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt rock") then
-                    if Value then applyRockESP(rock) else removeESP(rock) end
+                    if Value then 
+                        task.spawn(function()
+                            applyRockESP(rock)
+                        end)
+                    else 
+                        removeESP(rock)
+                    end
                 end
             end
         end
@@ -788,7 +876,13 @@ RockSection:AddToggle("Rock_BasaltVein", {
         if rocksFolder then
             for _, rock in pairs(rocksFolder:GetDescendants()) do
                 if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt vein") then
-                    if Value then applyRockESP(rock) else removeESP(rock) end
+                    if Value then 
+                        task.spawn(function()
+                            applyRockESP(rock)
+                        end)
+                    else 
+                        removeESP(rock)
+                    end
                 end
             end
         end
@@ -804,7 +898,13 @@ RockSection:AddToggle("Rock_BasaltCore", {
         if rocksFolder then
             for _, rock in pairs(rocksFolder:GetDescendants()) do
                 if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt core") then
-                    if Value then applyRockESP(rock) else removeESP(rock) end
+                    if Value then 
+                        task.spawn(function()
+                            applyRockESP(rock)
+                        end)
+                    else 
+                        removeESP(rock)
+                    end
                 end
             end
         end
@@ -820,7 +920,13 @@ RockSection:AddToggle("Rock_VolcanicRock", {
         if rocksFolder then
             for _, rock in pairs(rocksFolder:GetDescendants()) do
                 if rock:IsA("Model") and string.find(string.lower(rock.Name), "volcanic rock") then
-                    if Value then applyRockESP(rock) else removeESP(rock) end
+                    if Value then 
+                        task.spawn(function()
+                            applyRockESP(rock)
+                        end)
+                    else 
+                        removeESP(rock)
+                    end
                 end
             end
         end
@@ -1026,14 +1132,17 @@ ActionSection:AddButton({
         if Toggles.Rock_BasaltCore then Toggles.Rock_BasaltCore:SetValue(true) end
         if Toggles.Rock_VolcanicRock then Toggles.Rock_VolcanicRock:SetValue(true) end
         
-        local rocksFolder = Workspace:FindFirstChild("Rocks")
-        if rocksFolder then
-            for _, rock in pairs(rocksFolder:GetDescendants()) do
-                if rock:IsA("Model") then
-                    applyRockESP(rock)
+        task.spawn(function()
+            local rocksFolder = Workspace:FindFirstChild("Rocks")
+            if rocksFolder then
+                for _, rock in pairs(rocksFolder:GetDescendants()) do
+                    if rock:IsA("Model") then
+                        applyRockESP(rock)
+                    end
                 end
             end
-        end
+        end)
+        
         Library:Notify("All rocks enabled!", 2)
     end,
     Tooltip = "Enable ESP for all rock types"
@@ -1146,16 +1255,15 @@ Library:OnUnload(function()
     end
     
     -- Clean up all monitoring connections
-    for rock, connections in pairs(RockMonitorConnections) do
+    for rockId, connections in pairs(RockMonitorConnections) do
         for _, conn in pairs(connections) do
             if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
                 conn:Disconnect()
-            elseif typeof(conn) == "thread" then
-                task.cancel(conn)
             end
         end
     end
     RockMonitorConnections = {}
+    RockData = {}
 end)
 
 -- Initial setup
@@ -1163,8 +1271,8 @@ print("==========================================")
 print("reiTF v2.1 + Teleport System")
 print("==========================================")
 
-task.wait(0.5)
-setupPlayerHitDetection()
+task.wait(1)
+setupRockDetection()
 
 print("✓ ESP Loaded Successfully!")
 print("✓ Teleport system ready!")
