@@ -1,14 +1,11 @@
--- The Forge Rock & Ore ESP Script + Teleport Feature
-local LibraryUrl = "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Test.lua"
+-- The Forge Rock & Ore ESP Script + Teleport Feature (Obsidian Library)
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- Load UI Library
-local Success, Library = pcall(function()
-    return loadstring(game:HttpGet(LibraryUrl))()
-end)
-
-if not Success or not Library then 
-    return warn("Error loading UI library!") 
-end
+local Options = Library.Options
+local Toggles = Library.Toggles
 
 -- Services
 local Players = game:GetService("Players")
@@ -17,40 +14,45 @@ local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Initialize Window
-local Window = Library:Window("reiTF")
+local Window = Library:CreateWindow({
+    Title = "reiTF",
+    Footer = "v2.1 + Teleport",
+    Icon = 95816097006870,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
 
 -- Create Tabs
-local ESPTab = Window:Tab("ESP", "eye")
-local PlayerESPTab = Window:Tab("Player ESP", "users")
-local UtilityTab = Window:Tab("Utility", "settings")
-local TeleportTab = Window:Tab("Teleport", "map-pin") -- New tab for teleport
+local Tabs = {
+    ESP = Window:AddTab("ESP", "eye"),
+    PlayerESP = Window:AddTab("Player ESP", "users"),
+    Teleport = Window:AddTab("Teleport", "map-pin"),
+    Utility = Window:AddTab("Utility", "settings"),
+    ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+}
 
 -- Create Sections
-local OreSection = ESPTab:Section("ORES")
-local RockSection = ESPTab:Section("ROCKS")
-local PlayerSection = PlayerESPTab:Section("Player Selection")
-local TeleportSection = TeleportTab:Section("Teleport Locations")
-local ActionSection = UtilityTab:Section("Quick Actions")
-local InfoSection = UtilityTab:Section("Information")
+local OreSection = Tabs.ESP:AddLeftGroupbox("ORES", "gem")
+local RockSection = Tabs.ESP:AddRightGroupbox("ROCKS", "box")
+local PlayerSection = Tabs.PlayerESP:AddLeftGroupbox("Player Selection", "users")
+local TeleportSection = Tabs.Teleport:AddLeftGroupbox("Teleport Locations", "map-pin")
+local ActionSection = Tabs.Utility:AddLeftGroupbox("Quick Actions", "zap")
+local InfoSection = Tabs.Utility:AddRightGroupbox("Information", "info")
 
 -- ESP Storage
 local ESPObjects = {}
 local ProcessedOres = {}
 local PlayerESP = {}
 local SelectedPlayer = nil
-local PlayerESPEnabled = false
 
 -- Teleport Configuration
 local TeleportConfig = {
-    ["Farm Spot"] = {
-        enabled = false,
-        position = Vector3.new(719.2117309570312, 48.360374450683594, 103.62264251708984),
-        intermediateY = 10, -- Y position for first tween (going down)
-        duration1 = 0.5, -- Duration for first tween (to intermediate position)
-        duration2 = 1.0, -- Duration for second tween (to final position)
-        easingStyle = Enum.EasingStyle.Quad,
-        easingDirection = Enum.EasingDirection.Out
-    }
+    position = Vector3.new(719.2117309570312, 48.360374450683594, 103.62264251708984),
+    intermediateY = 10,
+    duration1 = 0.5,
+    duration2 = 1.0,
+    easingStyle = Enum.EasingStyle.Quad,
+    easingDirection = Enum.EasingDirection.Out
 }
 
 -- Ore Configuration
@@ -90,97 +92,59 @@ local RockConfig = {
 -- Function untuk teleport dengan 2-step tween
 local function teleportToFarm()
     if not LocalPlayer.Character then
-        Library:Notify("Teleport", "Character not found!", 2)
+        Library:Notify("Character not found!", 2)
         return
     end
     
     local humanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then
-        Library:Notify("Teleport", "HumanoidRootPart not found!", 2)
+        Library:Notify("HumanoidRootPart not found!", 2)
         return
     end
     
-    local config = TeleportConfig["Farm Spot"]
-    
-    -- Step 1: Tween ke posisi bawah (Y = 10)
     local intermediatePosition = Vector3.new(
-        config.position.X,
-        config.intermediateY,
-        config.position.Z
+        TeleportConfig.position.X,
+        TeleportConfig.intermediateY,
+        TeleportConfig.position.Z
     )
     
-    -- Step 2: Tween ke posisi akhir (Y = 48.36...)
-    local finalPosition = config.position
+    local finalPosition = TeleportConfig.position
     
-    -- Buat tween info
     local tweenInfo1 = TweenInfo.new(
-        config.duration1,
-        config.easingStyle,
-        config.easingDirection
+        TeleportConfig.duration1,
+        TeleportConfig.easingStyle,
+        TeleportConfig.easingDirection
     )
     
     local tweenInfo2 = TweenInfo.new(
-        config.duration2,
-        config.easingStyle,
-        config.easingDirection
+        TeleportConfig.duration2,
+        TeleportConfig.easingStyle,
+        TeleportConfig.easingDirection
     )
     
-    -- Step 1: Tween ke posisi bawah
     local tween1 = TweenService:Create(humanoidRootPart, tweenInfo1, {
         CFrame = CFrame.new(intermediatePosition)
     })
     
     tween1:Play()
-    Library:Notify("Teleport", "Going down to Y = " .. config.intermediateY .. "...", 2)
+    Library:Notify("Going down to Y = " .. TeleportConfig.intermediateY .. "...", 2)
     
-    -- Tunggu sampai tween1 selesai, lalu lanjut ke step 2
     tween1.Completed:Connect(function()
-        task.wait(0.1) -- Small delay between tweens
+        task.wait(0.1)
         
-        -- Step 2: Tween ke posisi atas
         local tween2 = TweenService:Create(humanoidRootPart, tweenInfo2, {
             CFrame = CFrame.new(finalPosition)
         })
         
         tween2:Play()
-        Library:Notify("Teleport", "Going up to final position...", 2)
+        Library:Notify("Going up to final position...", 2)
         
         tween2.Completed:Connect(function()
-            Library:Notify("Teleport", "Arrived at Farm Spot!", 3)
+            Library:Notify("Arrived at Farm Spot!", 3)
             print("✓ Teleport completed to position:", finalPosition)
         end)
     end)
 end
-
--- Function untuk toggle teleport
-local function toggleFarmTeleport(value)
-    TeleportConfig["Farm Spot"].enabled = value
-    
-    if value then
-        -- Jika toggle diaktifkan, jalankan teleport
-        teleportToFarm()
-    else
-        Library:Notify("Teleport", "Farm teleport disabled", 2)
-    end
-end
-
--- Add teleport toggle to UI
-TeleportSection:Toggle("Farm Spot Teleport", false, toggleFarmTeleport)
-
--- Info about the teleport location
-TeleportSection:Label("━━━━━━━━━━━━━━━━━")
-TeleportSection:Label("Farm Spot Coordinates:")
-TeleportSection:Label("X: 719.21")
-TeleportSection:Label("Y: 48.36")
-TeleportSection:Label("Z: 103.62")
-TeleportSection:Label("━━━━━━━━━━━━━━━━━")
-TeleportSection:Label("Teleport Process:")
-TeleportSection:Label("1. Go down to Y = 10")
-TeleportSection:Label("2. Then go up to final Y")
-TeleportSection:Label("━━━━━━━━━━━━━━━━━")
-
--- [SISA SCRIPT ESP DAN FUNGSI LAINNYA TETAP SAMA...]
--- Berikut adalah sisa script ESP yang tidak berubah:
 
 -- Function untuk get health color
 local function getHealthColor(currentHP, maxHP)
@@ -228,14 +192,12 @@ local function createRockLabel(rockModel, rockType, currentHP, maxHP)
         billboardGui.Adornee = attachPart
         billboardGui.Parent = rockModel
         
-        -- Background Frame
         local bgFrame = Instance.new("Frame")
         bgFrame.Name = "MainFrame"
         bgFrame.Size = UDim2.new(1, 0, 1, 0)
         bgFrame.BackgroundTransparency = 1
         bgFrame.Parent = billboardGui
         
-        -- Rock Name Label
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "NameLabel"
         nameLabel.Size = UDim2.new(1, 0, 0.35, 0)
@@ -250,7 +212,6 @@ local function createRockLabel(rockModel, rockType, currentHP, maxHP)
         nameLabel.TextScaled = false
         nameLabel.Parent = bgFrame
         
-        -- HP Text Label
         local hpLabel = Instance.new("TextLabel")
         hpLabel.Name = "HPLabel"
         hpLabel.Size = UDim2.new(1, 0, 0.3, 0)
@@ -265,7 +226,6 @@ local function createRockLabel(rockModel, rockType, currentHP, maxHP)
         hpLabel.TextScaled = false
         hpLabel.Parent = bgFrame
         
-        -- HP Bar Background
         local barBg = Instance.new("Frame")
         barBg.Name = "BarBackground"
         barBg.Size = UDim2.new(0.9, 0, 0.2, 0)
@@ -274,7 +234,6 @@ local function createRockLabel(rockModel, rockType, currentHP, maxHP)
         barBg.BorderSizePixel = 0
         barBg.Parent = bgFrame
         
-        -- HP Bar Fill
         local barFill = Instance.new("Frame")
         barFill.Name = "HealthBar"
         barFill.Size = UDim2.new(healthPercentage, 0, 1, 0)
@@ -615,10 +574,27 @@ local function clearAllESP()
     end
     ESPObjects = {}
     ProcessedOres = {}
-    Library:Notify("ESP", "All ESP cleared!", 2)
+    Library:Notify("All ESP cleared!", 2)
 end
 
--- SEMUA ORE
+-- ============= UI CREATION =============
+
+-- TELEPORT SECTION
+TeleportSection:AddButton({
+    Text = "Teleport to Farm Spot",
+    Func = teleportToFarm,
+    Tooltip = "Teleport to the farm location"
+})
+
+TeleportSection:AddDivider()
+TeleportSection:AddLabel("Farm Spot Coordinates:", true)
+TeleportSection:AddLabel("X: 719.21 | Y: 48.36 | Z: 103.62", true)
+TeleportSection:AddDivider()
+TeleportSection:AddLabel("Teleport Process:", true)
+TeleportSection:AddLabel("1. Goes down to Y = 10", true)
+TeleportSection:AddLabel("2. Then goes up to final Y", true)
+
+-- ORE ESP TOGGLES
 local oreList = {
     "Cobalt", "Titanium", "Volcanic Rock", "Lapis Lazuli", "Quartz",
     "Amethyst", "Topaz", "Diamond", "Sapphire", "Cuprite",
@@ -627,63 +603,82 @@ local oreList = {
     "Demonite", "Darkryte"
 }
 
--- Create toggles untuk semua ore
 for _, oreName in ipairs(oreList) do
-    OreSection:Toggle(oreName, false, function(Value)
-        OreConfig[oreName].enabled = Value
-    end)
+    OreSection:AddToggle("Ore_" .. oreName, {
+        Text = oreName,
+        Default = false,
+        Callback = function(Value)
+            OreConfig[oreName].enabled = Value
+        end
+    })
 end
 
--- Rock Type Toggles
-RockSection:Toggle("Basalt Rock", false, function(Value)
-    RockConfig["Basalt Rock"].enabled = Value
-    local rocksFolder = Workspace:FindFirstChild("Rocks")
-    if rocksFolder then
-        for _, rock in pairs(rocksFolder:GetDescendants()) do
-            if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt rock") then
-                if Value then applyRockESP(rock) else removeESP(rock) end
+-- ROCK ESP TOGGLES
+RockSection:AddToggle("Rock_BasaltRock", {
+    Text = "Basalt Rock",
+    Default = false,
+    Callback = function(Value)
+        RockConfig["Basalt Rock"].enabled = Value
+        local rocksFolder = Workspace:FindFirstChild("Rocks")
+        if rocksFolder then
+            for _, rock in pairs(rocksFolder:GetDescendants()) do
+                if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt rock") then
+                    if Value then applyRockESP(rock) else removeESP(rock) end
+                end
             end
         end
     end
-end)
+})
 
-RockSection:Toggle("Basalt Vein", false, function(Value)
-    RockConfig["Basalt Vein"].enabled = Value
-    local rocksFolder = Workspace:FindFirstChild("Rocks")
-    if rocksFolder then
-        for _, rock in pairs(rocksFolder:GetDescendants()) do
-            if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt vein") then
-                if Value then applyRockESP(rock) else removeESP(rock) end
+RockSection:AddToggle("Rock_BasaltVein", {
+    Text = "Basalt Vein",
+    Default = false,
+    Callback = function(Value)
+        RockConfig["Basalt Vein"].enabled = Value
+        local rocksFolder = Workspace:FindFirstChild("Rocks")
+        if rocksFolder then
+            for _, rock in pairs(rocksFolder:GetDescendants()) do
+                if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt vein") then
+                    if Value then applyRockESP(rock) else removeESP(rock) end
+                end
             end
         end
     end
-end)
+})
 
-RockSection:Toggle("Basalt Core", false, function(Value)
-    RockConfig["Basalt Core"].enabled = Value
-    local rocksFolder = Workspace:FindFirstChild("Rocks")
-    if rocksFolder then
-        for _, rock in pairs(rocksFolder:GetDescendants()) do
-            if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt core") then
-                if Value then applyRockESP(rock) else removeESP(rock) end
+RockSection:AddToggle("Rock_BasaltCore", {
+    Text = "Basalt Core",
+    Default = false,
+    Callback = function(Value)
+        RockConfig["Basalt Core"].enabled = Value
+        local rocksFolder = Workspace:FindFirstChild("Rocks")
+        if rocksFolder then
+            for _, rock in pairs(rocksFolder:GetDescendants()) do
+                if rock:IsA("Model") and string.find(string.lower(rock.Name), "basalt core") then
+                    if Value then applyRockESP(rock) else removeESP(rock) end
+                end
             end
         end
     end
-end)
+})
 
-RockSection:Toggle("Volcanic Rock ⭐", false, function(Value)
-    RockConfig["Volcanic Rock"].enabled = Value
-    local rocksFolder = Workspace:FindFirstChild("Rocks")
-    if rocksFolder then
-        for _, rock in pairs(rocksFolder:GetDescendants()) do
-            if rock:IsA("Model") and string.find(string.lower(rock.Name), "volcanic rock") then
-                if Value then applyRockESP(rock) else removeESP(rock) end
+RockSection:AddToggle("Rock_VolcanicRock", {
+    Text = "Volcanic Rock ⭐",
+    Default = false,
+    Callback = function(Value)
+        RockConfig["Volcanic Rock"].enabled = Value
+        local rocksFolder = Workspace:FindFirstChild("Rocks")
+        if rocksFolder then
+            for _, rock in pairs(rocksFolder:GetDescendants()) do
+                if rock:IsA("Model") and string.find(string.lower(rock.Name), "volcanic rock") then
+                    if Value then applyRockESP(rock) else removeESP(rock) end
+                end
             end
         end
     end
-end)
+})
 
--- Player ESP Section
+-- PLAYER ESP SECTION
 local playerList = {}
 for _, player in pairs(Players:GetPlayers()) do
     if player ~= LocalPlayer then
@@ -691,26 +686,34 @@ for _, player in pairs(Players:GetPlayers()) do
     end
 end
 
-PlayerSection:Dropdown("Select Player", playerList, function(Value)
-    SelectedPlayer = Players:FindFirstChild(Value)
-    Library:Notify("Player ESP", "Selected: " .. Value, 2)
-end)
-
-PlayerSection:Toggle("Enable Player ESP", false, function(Value)
-    PlayerESPEnabled = Value
-    
-    if SelectedPlayer then
-        if Value then
-            applyPlayerESP(SelectedPlayer)
-            Library:Notify("Player ESP", "ESP enabled for " .. SelectedPlayer.Name, 2)
-        else
-            removePlayerESP(SelectedPlayer)
-            Library:Notify("Player ESP", "ESP disabled for " .. SelectedPlayer.Name, 2)
-        end
-    else
-        Library:Notify("Player ESP", "Please select a player first!", 2)
+PlayerSection:AddDropdown("PlayerDropdown", {
+    Values = playerList,
+    Default = 1,
+    Multi = false,
+    Text = "Select Player",
+    Callback = function(Value)
+        SelectedPlayer = Players:FindFirstChild(Value)
+        Library:Notify("Selected: " .. Value, 2)
     end
-end)
+})
+
+PlayerSection:AddToggle("PlayerESPToggle", {
+    Text = "Enable Player ESP",
+    Default = false,
+    Callback = function(Value)
+        if SelectedPlayer then
+            if Value then
+                applyPlayerESP(SelectedPlayer)
+                Library:Notify("ESP enabled for " .. SelectedPlayer.Name, 2)
+            else
+                removePlayerESP(SelectedPlayer)
+                Library:Notify("ESP disabled for " .. SelectedPlayer.Name, 2)
+            end
+        else
+            Library:Notify("Please select a player first!", 2)
+        end
+    end
+})
 
 -- Update player list
 Players.PlayerAdded:Connect(function(player)
@@ -721,74 +724,177 @@ Players.PlayerAdded:Connect(function(player)
             table.insert(playerList, p.Name)
         end
     end
+    Options.PlayerDropdown:SetValues(playerList)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
     removePlayerESP(player)
-end)
-
--- Quick Action Buttons
-ActionSection:Button("Enable All Ores", function()
-    for oreName, config in pairs(OreConfig) do
-        config.enabled = true
-    end
-    Library:Notify("ESP", "All ores enabled!", 2)
-end)
-
-ActionSection:Button("Disable All Ores", function()
-    for oreName, config in pairs(OreConfig) do
-        config.enabled = false
-    end
-    Library:Notify("ESP", "All ores disabled!", 2)
-end)
-
-ActionSection:Button("Enable All Rocks", function()
-    for rockName, config in pairs(RockConfig) do
-        config.enabled = true
-    end
-    local rocksFolder = Workspace:FindFirstChild("Rocks")
-    if rocksFolder then
-        for _, rock in pairs(rocksFolder:GetDescendants()) do
-            if rock:IsA("Model") then
-                applyRockESP(rock)
-            end
+    playerList = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(playerList, p.Name)
         end
     end
-    Library:Notify("ESP", "All rocks enabled!", 2)
+    Options.PlayerDropdown:SetValues(playerList)
 end)
 
-ActionSection:Button("Disable All Rocks", function()
-    for rockName, config in pairs(RockConfig) do
-        config.enabled = false
+-- QUICK ACTION BUTTONS
+ActionSection:AddButton({
+    Text = "Enable All Ores",
+    Func = function()
+        for oreName, config in pairs(OreConfig) do
+            config.enabled = true
+            if Toggles["Ore_" .. oreName] then
+                Toggles["Ore_" .. oreName]:SetValue(true)
+            end
+        end
+        Library:Notify("All ores enabled!", 2)
+    end,
+    Tooltip = "Enable ESP for all ore types"
+})
+
+ActionSection:AddButton({
+    Text = "Disable All Ores",
+    Func = function()
+        for oreName, config in pairs(OreConfig) do
+            config.enabled = false
+            if Toggles["Ore_" .. oreName] then
+                Toggles["Ore_" .. oreName]:SetValue(false)
+            end
+        end
+        Library:Notify("All ores disabled!", 2)
+    end,
+    Tooltip = "Disable ESP for all ore types"
+})
+
+ActionSection:AddDivider()
+
+ActionSection:AddButton({
+    Text = "Enable All Rocks",
+    Func = function()
+        for rockName, config in pairs(RockConfig) do
+            config.enabled = true
+        end
+        
+        if Toggles.Rock_BasaltRock then Toggles.Rock_BasaltRock:SetValue(true) end
+        if Toggles.Rock_BasaltVein then Toggles.Rock_BasaltVein:SetValue(true) end
+        if Toggles.Rock_BasaltCore then Toggles.Rock_BasaltCore:SetValue(true) end
+        if Toggles.Rock_VolcanicRock then Toggles.Rock_VolcanicRock:SetValue(true) end
+        
+        local rocksFolder = Workspace:FindFirstChild("Rocks")
+        if rocksFolder then
+            for _, rock in pairs(rocksFolder:GetDescendants()) do
+                if rock:IsA("Model") then
+                    applyRockESP(rock)
+                end
+            end
+        end
+        Library:Notify("All rocks enabled!", 2)
+    end,
+    Tooltip = "Enable ESP for all rock types"
+})
+
+ActionSection:AddButton({
+    Text = "Disable All Rocks",
+    Func = function()
+        for rockName, config in pairs(RockConfig) do
+            config.enabled = false
+        end
+        
+        if Toggles.Rock_BasaltRock then Toggles.Rock_BasaltRock:SetValue(false) end
+        if Toggles.Rock_BasaltVein then Toggles.Rock_BasaltVein:SetValue(false) end
+        if Toggles.Rock_BasaltCore then Toggles.Rock_BasaltCore:SetValue(false) end
+        if Toggles.Rock_VolcanicRock then Toggles.Rock_VolcanicRock:SetValue(false) end
+        
+        clearAllESP()
+    end,
+    Tooltip = "Disable ESP for all rock types"
+})
+
+ActionSection:AddDivider()
+
+ActionSection:AddButton({
+    Text = "Clear All ESP",
+    Func = clearAllESP,
+    Tooltip = "Remove all ESP elements"
+})
+
+-- INFORMATION SECTION
+InfoSection:AddLabel("reiTF v2.1 + Teleport", true)
+InfoSection:AddDivider()
+InfoSection:AddLabel("Features:", true)
+InfoSection:AddLabel("• 22 Ores ESP", true)
+InfoSection:AddLabel("• Rock health bars", true)
+InfoSection:AddLabel("• Player ESP system", true)
+InfoSection:AddLabel("• 2-Step Teleport", true)
+InfoSection:AddDivider()
+InfoSection:AddLabel("Teleport Info:", true)
+InfoSection:AddLabel("• Goes down to Y=10", true)
+InfoSection:AddLabel("• Then up to Y=48.36", true)
+InfoSection:AddDivider()
+InfoSection:AddLabel("Tips:", true)
+InfoSection:AddLabel("• Hit rocks for ESP", true)
+InfoSection:AddLabel("• Use Teleport tab", true)
+InfoSection:AddLabel("• Farm Spot is best!", true)
+
+-- UI SETTINGS TAB
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
+
+MenuGroup:AddToggle("KeybindMenuOpen", {
+    Default = Library.KeybindFrame.Visible,
+    Text = "Open Keybind Menu",
+    Callback = function(value)
+        Library.KeybindFrame.Visible = value
+    end,
+})
+
+MenuGroup:AddToggle("ShowCustomCursor", {
+    Text = "Custom Cursor",
+    Default = true,
+    Callback = function(Value)
+        Library.ShowCustomCursor = Value
+    end,
+})
+
+MenuGroup:AddDivider()
+MenuGroup:AddLabel("Menu bind")
+    :AddKeyPicker("MenuKeybind", { 
+        Default = "RightShift", 
+        NoUI = true, 
+        Text = "Menu keybind" 
+    })
+
+MenuGroup:AddButton({
+    Text = "Unload",
+    Func = function()
+        Library:Unload()
+    end,
+    Tooltip = "Unload the script"
+})
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+-- Setup Theme & Save Manager
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+
+ThemeManager:SetFolder("reiTF")
+SaveManager:SetFolder("reiTF/TheForge")
+
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+
+-- Library Unload Handler
+Library:OnUnload(function()
+    print("reiTF ESP Unloaded!")
+    clearAllESP()
+    for _, player in pairs(Players:GetPlayers()) do
+        removePlayerESP(player)
     end
-    clearAllESP()
 end)
-
-ActionSection:Button("Clear All ESP", function()
-    clearAllESP()
-end)
-
-ActionSection:Button("Farm Teleport", function()
-    teleportToFarm()
-end)
-
--- Information
-InfoSection:Label("reiTF v2.1 + Teleport")
-InfoSection:Label("━━━━━━━━━━━━━━━━━")
-InfoSection:Label("Features:")
-InfoSection:Label("• 22 Ores ESP")
-InfoSection:Label("• Rock health bars")
-InfoSection:Label("• Player ESP system")
-InfoSection:Label("• 2-Step Teleport")
-InfoSection:Label("━━━━━━━━━━━━━━━━━")
-InfoSection:Label("Teleport Info:")
-InfoSection:Label("• Goes down to Y=10")
-InfoSection:Label("• Then up to Y=48.36")
-InfoSection:Label("━━━━━━━━━━━━━━━━━")
-InfoSection:Label("Tips:")
-InfoSection:Label("• Hit rocks for ESP")
-InfoSection:Label("• Use Teleport tab")
-InfoSection:Label("• Farm Spot is best!")
 
 -- Initial setup
 print("==========================================")
@@ -801,4 +907,5 @@ setupPlayerHitDetection()
 print("✓ ESP Loaded Successfully!")
 print("✓ Teleport system ready!")
 print("✓ Use Teleport tab for Farm Spot!")
+print("✓ Obsidian Library loaded!")
 print("==========================================")
