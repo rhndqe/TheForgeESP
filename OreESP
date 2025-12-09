@@ -17,7 +17,7 @@ local LocalPlayer = Players.LocalPlayer
 local Window = Library:CreateWindow({
     Title = "reiTF",
     Footer = "v2.1 + Teleport",
-    Icon = 95816097006870,
+    Icon = 420905023,
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -43,7 +43,8 @@ local InfoSection = Tabs.Utility:AddRightGroupbox("Information", "info")
 local ESPObjects = {}
 local ProcessedOres = {}
 local PlayerESP = {}
-local SelectedPlayer = nil
+local SelectedPlayers = {} -- Changed to table for multiple players
+local RockMonitorConnections = {} -- Store connections for cleanup
 
 -- Teleport Configuration
 local TeleportConfig = {
@@ -274,7 +275,7 @@ local function createOreLabel(obj, text, colorValue)
     end)
 end
 
--- Function untuk update rock health label
+-- Function untuk update rock health label (REAL-TIME)
 local function updateRockHealthLabel(rockModel)
     local success = pcall(function()
         local billboardGui = rockModel:FindFirstChild("ESPLabel")
@@ -286,11 +287,16 @@ local function updateRockHealthLabel(rockModel)
         local maxHP = rockModel:GetAttribute("MaxHP")
         if not maxHP then return end
         
-        local infoFrame = rockModel:FindFirstChild("infoFrame", true)
-        if not infoFrame then return end
+        -- Find rockHP dengan search yang lebih dalam
+        local rockHP = nil
+        for _, descendant in pairs(rockModel:GetDescendants()) do
+            if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
+                rockHP = descendant
+                break
+            end
+        end
         
-        local rockHP = infoFrame:FindFirstChild("rockHP", true)
-        if not rockHP or rockHP.ClassName ~= "TextLabel" then return end
+        if not rockHP then return end
         
         local hpText = rockHP.Text
         if not hpText or hpText == "" then return end
@@ -332,16 +338,98 @@ local function updateRockHealthLabel(rockModel)
     end)
 end
 
+-- Function untuk monitor rock HP changes secara real-time
+local function monitorRockHP(rockModel)
+    -- Disconnect any existing connections for this rock
+    if RockMonitorConnections[rockModel] then
+        for _, connection in pairs(RockMonitorConnections[rockModel]) do
+            if connection and connection.Connected then
+                connection:Disconnect()
+            end
+        end
+        RockMonitorConnections[rockModel] = nil
+    end
+    
+    local connections = {}
+    
+    task.spawn(function()
+        -- Find rockHP dengan search yang lebih dalam
+        local rockHP = nil
+        for _, descendant in pairs(rockModel:GetDescendants()) do
+            if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
+                rockHP = descendant
+                break
+            end
+        end
+        
+        if not rockHP then return end
+        
+        -- Monitor text changes untuk update real-time
+        local lastHP = rockHP.Text
+        local textConnection = rockHP:GetPropertyChangedSignal("Text"):Connect(function()
+            if rockHP.Text ~= lastHP then
+                lastHP = rockHP.Text
+                updateRockHealthLabel(rockModel)
+            end
+        end)
+        table.insert(connections, textConnection)
+        
+        -- Backup: Update setiap 0.1 detik untuk memastikan
+        local updateLoop = task.spawn(function()
+            while rockModel and rockModel.Parent and rockModel:GetAttribute("MaxHP") do
+                updateRockHealthLabel(rockModel)
+                task.wait(0.1)
+            end
+        end)
+        table.insert(connections, updateLoop)
+        
+        -- Store connections untuk cleanup nanti
+        RockMonitorConnections[rockModel] = connections
+        
+        -- Cleanup saat rock destroyed
+        rockModel.AncestryChanged:Connect(function()
+            if not rockModel.Parent then
+                if RockMonitorConnections[rockModel] then
+                    for _, conn in pairs(RockMonitorConnections[rockModel]) do
+                        if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                            conn:Disconnect()
+                        elseif typeof(conn) == "thread" then
+                            task.cancel(conn)
+                        end
+                    end
+                    RockMonitorConnections[rockModel] = nil
+                end
+            end
+        end)
+    end)
+end
+
 -- Function untuk remove ESP
 local function removeESP(obj)
     pcall(function()
         if obj and obj.Parent then
+            -- Remove visual elements
             if obj:FindFirstChild("ESPHighlight") then
                 obj.ESPHighlight:Destroy()
             end
             if obj:FindFirstChild("ESPLabel") then
                 obj.ESPLabel:Destroy()
             end
+            
+            -- Disconnect monitoring connections
+            if RockMonitorConnections[obj] then
+                for _, conn in pairs(RockMonitorConnections[obj]) do
+                    if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                        conn:Disconnect()
+                    elseif typeof(conn) == "thread" then
+                        task.cancel(conn)
+                    end
+                end
+                RockMonitorConnections[obj] = nil
+            end
+            
+            -- Remove attribute
+            obj:SetAttribute("MaxHP", nil)
         end
     end)
 end
@@ -401,15 +489,15 @@ local function applyRockESP(rockModel)
                 local maxHP = nil
                 local attempts = 0
                 
+                -- Search untuk rockHP dengan lebih dalam
                 while attempts < 20 and not maxHP do
                     task.wait(0.1)
                     attempts = attempts + 1
                     
-                    local infoFrame = rockModel:FindFirstChild("infoFrame", true)
-                    if infoFrame then
-                        local rockHP = infoFrame:FindFirstChild("rockHP", true)
-                        if rockHP and rockHP.ClassName == "TextLabel" then
-                            local hpText = rockHP.Text
+                    -- Cari rockHP di semua descendants
+                    for _, descendant in pairs(rockModel:GetDescendants()) do
+                        if descendant:IsA("TextLabel") and descendant.Name == "rockHP" then
+                            local hpText = descendant.Text
                             if hpText and hpText ~= "" then
                                 local cleanedHP = hpText:gsub("[^%d]", "")
                                 local parsedHP = tonumber(cleanedHP)
@@ -421,6 +509,8 @@ local function applyRockESP(rockModel)
                             end
                         end
                     end
+                    
+                    if maxHP then break end
                 end
                 
                 if not maxHP then
@@ -442,13 +532,8 @@ local function applyRockESP(rockModel)
                 
                 table.insert(ESPObjects, rockModel)
                 
-                task.spawn(function()
-                    task.wait(1)
-                    while rockModel and rockModel.Parent and rockModel:GetAttribute("MaxHP") do
-                        updateRockHealthLabel(rockModel)
-                        task.wait(0.5)
-                    end
-                end)
+                -- Start real-time HP monitoring
+                monitorRockHP(rockModel)
             end
             break
         end
@@ -574,6 +659,19 @@ local function clearAllESP()
     end
     ESPObjects = {}
     ProcessedOres = {}
+    
+    -- Clear all rock monitor connections
+    for rock, connections in pairs(RockMonitorConnections) do
+        for _, conn in pairs(connections) do
+            if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                conn:Disconnect()
+            elseif typeof(conn) == "thread" then
+                task.cancel(conn)
+            end
+        end
+    end
+    RockMonitorConnections = {}
+    
     Library:Notify("All ESP cleared!", 2)
 end
 
@@ -679,63 +777,133 @@ RockSection:AddToggle("Rock_VolcanicRock", {
 })
 
 -- PLAYER ESP SECTION
-local playerList = {}
-for _, player in pairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer then
-        table.insert(playerList, player.Name)
+local function updatePlayerList()
+    local playerList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playerList, player.Name)
+        end
+    end
+    return playerList
+end
+
+-- Create a scrolling frame for player checkboxes
+local PlayerListGroup = Tabs.PlayerESP:AddRightGroupbox("Player List (Multi-Select)", "users")
+
+PlayerListGroup:AddLabel("Select players to ESP:", true)
+PlayerListGroup:AddDivider()
+
+-- Function to update player checkboxes
+local function refreshPlayerCheckboxes()
+    -- Clear existing checkboxes by recreating the groupbox
+    -- We'll use toggles instead for each player
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local toggleName = "PlayerESP_" .. player.Name
+            
+            if not Toggles[toggleName] then
+                PlayerListGroup:AddToggle(toggleName, {
+                    Text = player.Name,
+                    Default = false,
+                    Callback = function(Value)
+                        if Value then
+                            -- Add to selected players and apply ESP
+                            if not table.find(SelectedPlayers, player) then
+                                table.insert(SelectedPlayers, player)
+                            end
+                            applyPlayerESP(player)
+                            Library:Notify("ESP enabled for " .. player.Name, 2)
+                        else
+                            -- Remove from selected players and remove ESP
+                            for i, p in pairs(SelectedPlayers) do
+                                if p == player then
+                                    table.remove(SelectedPlayers, i)
+                                    break
+                                end
+                            end
+                            removePlayerESP(player)
+                            Library:Notify("ESP disabled for " .. player.Name, 2)
+                        end
+                    end
+                })
+            end
+        end
     end
 end
 
-PlayerSection:AddDropdown("PlayerDropdown", {
-    Values = playerList,
-    Default = 1,
-    Multi = false,
-    Text = "Select Player",
-    Callback = function(Value)
-        SelectedPlayer = Players:FindFirstChild(Value)
-        Library:Notify("Selected: " .. Value, 2)
-    end
-})
+-- Initial player checkboxes
+refreshPlayerCheckboxes()
 
-PlayerSection:AddToggle("PlayerESPToggle", {
-    Text = "Enable Player ESP",
-    Default = false,
-    Callback = function(Value)
-        if SelectedPlayer then
-            if Value then
-                applyPlayerESP(SelectedPlayer)
-                Library:Notify("ESP enabled for " .. SelectedPlayer.Name, 2)
-            else
-                removePlayerESP(SelectedPlayer)
-                Library:Notify("ESP disabled for " .. SelectedPlayer.Name, 2)
+PlayerSection:AddDivider()
+
+PlayerSection:AddButton({
+    Text = "Enable ESP for All Players",
+    Func = function()
+        local count = 0
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local toggleName = "PlayerESP_" .. player.Name
+                if Toggles[toggleName] then
+                    Toggles[toggleName]:SetValue(true)
+                end
+                applyPlayerESP(player)
+                if not table.find(SelectedPlayers, player) then
+                    table.insert(SelectedPlayers, player)
+                end
+                count = count + 1
             end
-        else
-            Library:Notify("Please select a player first!", 2)
         end
-    end
+        
+        if count > 0 then
+            Library:Notify("ESP enabled for all players (" .. count .. ")", 3)
+        else
+            Library:Notify("No other players found!", 2)
+        end
+    end,
+    Tooltip = "Enable ESP for everyone in the server"
 })
 
--- Update player list
+PlayerSection:AddButton({
+    Text = "Disable All Player ESP",
+    Func = function()
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local toggleName = "PlayerESP_" .. player.Name
+                if Toggles[toggleName] then
+                    Toggles[toggleName]:SetValue(false)
+                end
+                removePlayerESP(player)
+            end
+        end
+        
+        SelectedPlayers = {}
+        Library:Notify("All player ESP disabled!", 2)
+    end,
+    Tooltip = "Disable ESP for all players"
+})
+
+-- Update player list when players join/leave
 Players.PlayerAdded:Connect(function(player)
     task.wait(1)
-    playerList = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            table.insert(playerList, p.Name)
-        end
-    end
-    Options.PlayerDropdown:SetValues(playerList)
+    refreshPlayerCheckboxes()
 end)
 
 Players.PlayerRemoving:Connect(function(player)
     removePlayerESP(player)
-    playerList = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            table.insert(playerList, p.Name)
+    
+    -- Remove from selected players table
+    for i, selectedPlayer in pairs(SelectedPlayers) do
+        if selectedPlayer == player then
+            table.remove(SelectedPlayers, i)
+            break
         end
     end
-    Options.PlayerDropdown:SetValues(playerList)
+    
+    -- Remove the toggle
+    local toggleName = "PlayerESP_" .. player.Name
+    if Toggles[toggleName] then
+        Toggles[toggleName] = nil
+    end
 end)
 
 -- QUICK ACTION BUTTONS
@@ -887,13 +1055,30 @@ SaveManager:SetFolder("reiTF/TheForge")
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
+-- Set default theme to Mint
+ThemeManager:SetTheme("Mint")
+
 -- Library Unload Handler
 Library:OnUnload(function()
     print("reiTF ESP Unloaded!")
     clearAllESP()
+    
+    -- Clean up player ESP
     for _, player in pairs(Players:GetPlayers()) do
         removePlayerESP(player)
     end
+    
+    -- Clean up all monitoring connections
+    for rock, connections in pairs(RockMonitorConnections) do
+        for _, conn in pairs(connections) do
+            if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                conn:Disconnect()
+            elseif typeof(conn) == "thread" then
+                task.cancel(conn)
+            end
+        end
+    end
+    RockMonitorConnections = {}
 end)
 
 -- Initial setup
