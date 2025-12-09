@@ -59,28 +59,28 @@ local TeleportConfig = {
 
 -- Ore Configuration
 local OreConfig = {
-    ["Cobalt"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Titanium"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Volcanic Rock"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Lapis Lazuli"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
+    ["Cobalt"] = {enabled = false, color = Color3.fromRGB(0, 191, 255)},
+    ["Titanium"] = {enabled = false, color = Color3.fromRGB(192, 192, 192)},
+    ["Volcanic Rock"] = {enabled = false, color = Color3.fromRGB(255, 69, 0)},
+    ["Lapis Lazuli"] = {enabled = false, color = Color3.fromRGB(0, 0, 255)},
     ["Quartz"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Amethyst"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Topaz"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Diamond"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Sapphire"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Cuprite"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Obsidian"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Emerald"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Ruby"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Rivalite"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Lightite"] = {enabled = false, color = Color3.fromRGB(255, 255, 255)},
-    ["Uranium"] = {enabled = false, color = Color3.fromRGB(255, 165, 0)},
-    ["Mythril"] = {enabled = false, color = Color3.fromRGB(255, 165, 0)},
-    ["Eye Ore"] = {enabled = false, color = Color3.fromRGB(255, 165, 0)},
-    ["Fireite"] = {enabled = false, color = Color3.fromRGB(255, 165, 0)},
-    ["Magmaite"] = {enabled = false, color = Color3.fromRGB(255, 165, 0)},
-    ["Demonite"] = {enabled = false, color = Color3.fromRGB(0, 150, 255)},
-    ["Darkryte"] = {enabled = false, color = Color3.fromRGB(0, 150, 255)},
+    ["Amethyst"] = {enabled = false, color = Color3.fromRGB(128, 0, 128)},
+    ["Topaz"] = {enabled = false, color = Color3.fromRGB(255, 215, 0)},
+    ["Diamond"] = {enabled = false, color = Color3.fromRGB(185, 242, 255)},
+    ["Sapphire"] = {enabled = false, color = Color3.fromRGB(0, 0, 255)},
+    ["Cuprite"] = {enabled = false, color = Color3.fromRGB(184, 115, 51)},
+    ["Obsidian"] = {enabled = false, color = Color3.fromRGB(0, 0, 0)},
+    ["Emerald"] = {enabled = false, color = Color3.fromRGB(0, 255, 0)},
+    ["Ruby"] = {enabled = false, color = Color3.fromRGB(255, 0, 0)},
+    ["Rivalite"] = {enabled = false, color = Color3.fromRGB(255, 105, 180)},
+    ["Lightite"] = {enabled = false, color = Color3.fromRGB(255, 255, 224)},
+    ["Uranium"] = {enabled = false, color = Color3.fromRGB(0, 255, 0)},
+    ["Mythril"] = {enabled = false, color = Color3.fromRGB(176, 196, 222)},
+    ["Eye Ore"] = {enabled = false, color = Color3.fromRGB(255, 20, 147)},
+    ["Fireite"] = {enabled = false, color = Color3.fromRGB(255, 69, 0)},
+    ["Magmaite"] = {enabled = false, color = Color3.fromRGB(255, 140, 0)},
+    ["Demonite"] = {enabled = false, color = Color3.fromRGB(139, 0, 139)},
+    ["Darkryte"] = {enabled = false, color = Color3.fromRGB(25, 25, 112)},
 }
 
 -- Rock Type Configuration
@@ -245,7 +245,7 @@ local function createRockLabel(rockModel, rockType, currentHP, maxHP)
     end)
 end
 
--- Function untuk membuat simple ore label
+-- Function untuk membuat ore label
 local function createOreLabel(obj, text, colorValue)
     pcall(function()
         if obj:FindFirstChild("ESPLabel") then
@@ -258,21 +258,44 @@ local function createOreLabel(obj, text, colorValue)
         local billboardGui = Instance.new("BillboardGui")
         billboardGui.Name = "ESPLabel"
         billboardGui.AlwaysOnTop = true
-        billboardGui.Size = UDim2.new(0, 150, 0, 40)
+        billboardGui.Size = UDim2.new(0, 180, 0, 60)
         billboardGui.StudsOffset = Vector3.new(0, 4, 0)
         billboardGui.Adornee = attachPart
         billboardGui.Parent = obj
         
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1, 0, 1, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.Text = text
-        textLabel.TextColor3 = colorValue
-        textLabel.TextStrokeTransparency = 0
-        textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-        textLabel.TextSize = 18
-        textLabel.Font = Enum.Font.GothamBold
-        textLabel.Parent = billboardGui
+        local bgFrame = Instance.new("Frame")
+        bgFrame.Name = "MainFrame"
+        bgFrame.Size = UDim2.new(1, 0, 1, 0)
+        bgFrame.BackgroundTransparency = 1
+        bgFrame.Parent = billboardGui
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "NameLabel"
+        nameLabel.Size = UDim2.new(1, 0, 0.7, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = text
+        nameLabel.TextColor3 = colorValue
+        nameLabel.TextStrokeTransparency = 0
+        nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+        nameLabel.TextSize = 20
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextScaled = false
+        nameLabel.Parent = bgFrame
+        
+        local valueLabel = Instance.new("TextLabel")
+        valueLabel.Name = "ValueLabel"
+        valueLabel.Size = UDim2.new(1, 0, 0.3, 0)
+        valueLabel.Position = UDim2.new(0, 0, 0.7, 0)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.Text = "ORE"
+        valueLabel.TextColor3 = colorValue
+        valueLabel.TextStrokeTransparency = 0
+        valueLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+        valueLabel.TextSize = 16
+        valueLabel.Font = Enum.Font.GothamBold
+        valueLabel.TextScaled = false
+        valueLabel.Parent = bgFrame
     end)
 end
 
@@ -282,7 +305,6 @@ local function updateRockHealthLabel(rockModel)
     local rockInfo = RockData[rockId]
     
     if not rockInfo then
-        print("⚠ Rock data not found for:", rockId)
         return
     end
     
@@ -297,7 +319,6 @@ local function updateRockHealthLabel(rockModel)
         local maxHP = rockInfo.maxHP
         
         if not currentHP or not maxHP or maxHP <= 0 then
-            print("⚠ Invalid HP values for", rockId, "| Current:", currentHP, "Max:", maxHP)
             return
         end
         
@@ -305,7 +326,6 @@ local function updateRockHealthLabel(rockModel)
         if currentHP > maxHP then
             maxHP = currentHP
             rockInfo.maxHP = maxHP
-            print("✓ Updated MaxHP to:", maxHP, "for", rockId)
         end
         
         local healthColor = getHealthColor(currentHP, maxHP)
@@ -349,10 +369,6 @@ local function updateRockHealthLabel(rockModel)
             tween:Play()
         end
     end)
-    
-    if not success then
-        print("❌ Error updating rock label for:", rockId)
-    end
 end
 
 -- Function untuk mendapatkan HP dari TextLabel rockHP
@@ -368,23 +384,19 @@ local function getRockHPFromLabel(rockModel)
     end
     
     if not rockHPLabel then
-        print("⚠ No rockHP label found for:", rockModel:GetFullName())
         return nil
     end
     
     local hpText = rockHPLabel.Text
     if not hpText or hpText == "" then
-        print("⚠ Empty rockHP text for:", rockModel:GetFullName())
         return nil
     end
     
     -- Extract number dari format apapun dengan pattern matching yang lebih baik
-    -- Handle format: "1,234 HP", "HP: 1234", "1234", "20 HP", dll
     local cleanedHP = hpText:gsub(",", ""):match("%d+")
     local currentHP = tonumber(cleanedHP)
     
     if not currentHP or currentHP <= 0 then
-        print("⚠ Invalid HP parsed:", hpText, "→", currentHP, "for", rockModel:GetFullName())
         return nil
     end
     
@@ -439,11 +451,8 @@ local function monitorRockHP(rockModel)
         end
         
         if not rockHPLabel then
-            print("❌ Failed to find rockHP label for:", rockId)
             return
         end
-        
-        print("✓ Monitoring rockHP for:", rockId, "| Initial HP:", rockInfo.currentHP)
         
         -- Monitor text changes untuk update real-time
         local isUpdating = false
@@ -455,22 +464,15 @@ local function monitorRockHP(rockModel)
                 -- Dapatkan HP terbaru
                 local hpData = getRockHPFromLabel(rockModel)
                 if hpData then
-                    local oldHP = rockInfo.currentHP
                     rockInfo.currentHP = hpData.currentHP
                     
                     -- Update maxHP jika currentHP lebih besar
                     if hpData.currentHP > rockInfo.maxHP then
                         rockInfo.maxHP = hpData.currentHP
-                        print("✓ Updated maxHP to:", rockInfo.maxHP, "for", rockId)
                     end
                     
                     -- Update ESP
                     updateRockHealthLabel(rockModel)
-                    
-                    -- Debug log untuk perubahan HP
-                    if oldHP ~= hpData.currentHP then
-                        print("🔁 HP Changed for", rockId, "|", oldHP, "→", hpData.currentHP)
-                    end
                 end
                 
                 task.wait(0.05) -- Small debounce
@@ -528,12 +530,16 @@ local function removeESP(obj)
             
             -- Remove rock data
             RockData[objId] = nil
+            
+            -- Remove dari ProcessedOres jika itu ore
+            ProcessedOres[obj] = nil
         end
     end)
 end
 
--- Function untuk detect ore type
+-- Function untuk detect ore type - DIPERBAIKI
 local function detectOreType(oreModel)
+    -- Cek attribute pertama
     local oreAttribute = oreModel:GetAttribute("Ore")
     if oreAttribute then
         for oreName, _ in pairs(OreConfig) do
@@ -542,30 +548,69 @@ local function detectOreType(oreModel)
             end
         end
     end
+    
+    -- Cek di children untuk TextLabel dengan nama ore
+    for _, child in pairs(oreModel:GetDescendants()) do
+        if child:IsA("TextLabel") then
+            local text = string.lower(child.Text)
+            for oreName, _ in pairs(OreConfig) do
+                if string.find(text, string.lower(oreName)) then
+                    return oreName
+                end
+            end
+        end
+    end
+    
+    -- Cek nama model
+    local modelName = oreModel.Name
+    for oreName, _ in pairs(OreConfig) do
+        if string.find(string.lower(modelName), string.lower(oreName)) then
+            return oreName
+        end
+    end
+    
     return nil
 end
 
--- Function untuk apply ESP pada ore
+-- Function untuk apply ESP pada ore - DIPERBAIKI
 local function applyOreESP(oreModel)
     if not oreModel or not oreModel.Parent then return end
     if ProcessedOres[oreModel] then return end
     
+    -- Tunggu sebentar untuk memastikan model fully loaded
+    task.wait(0.1)
+    
     local oreType = detectOreType(oreModel)
     
-    if oreType and OreConfig[oreType] and OreConfig[oreType].enabled then
+    if not oreType then
+        -- Debug: print untuk mengetahui ore yang tidak terdeteksi
+        print("⚠ Ore type not detected for model:", oreModel.Name)
+        print("   Attributes:")
+        for _, attribute in pairs({"Ore", "oreType", "Type"}) do
+            local attrValue = oreModel:GetAttribute(attribute)
+            if attrValue then
+                print("   - " .. attribute .. ": " .. tostring(attrValue))
+            end
+        end
+        print("   Children:")
+        for _, child in pairs(oreModel:GetChildren()) do
+            if child:IsA("TextLabel") then
+                print("   - TextLabel: " .. child.Name .. " = " .. child.Text)
+            end
+        end
+        return
+    end
+    
+    if OreConfig[oreType] and OreConfig[oreType].enabled then
         local config = OreConfig[oreType]
+        
+        -- Debug
+        print("✓ Applying ESP to ore:", oreType, "| Model:", oreModel.Name)
+        
         createHighlight(oreModel, config.color)
         createOreLabel(oreModel, oreType, config.color)
         
         ProcessedOres[oreModel] = true
-        table.insert(ESPObjects, oreModel)
-        
-        task.delay(60, function()
-            if oreModel and oreModel.Parent then
-                removeESP(oreModel)
-                ProcessedOres[oreModel] = nil
-            end
-        end)
         
         oreModel.AncestryChanged:Connect(function()
             if not oreModel.Parent then
@@ -573,6 +618,56 @@ local function applyOreESP(oreModel)
             end
         end)
     end
+end
+
+-- Function untuk scan semua ore yang ada - FUNGSI BARU
+local function scanExistingOres()
+    print("🔍 Scanning for existing ores...")
+    
+    -- Cari di seluruh workspace
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            -- Cek jika ini adalah ore (berdasarkan attribute atau nama)
+            local hasOreAttribute = obj:GetAttribute("Ore") ~= nil
+            local isNamedOre = string.find(string.lower(obj.Name), "ore") or 
+                               obj.Name == "Ore" or
+                               string.find(string.lower(obj.Name), "cobalt") or
+                               string.find(string.lower(obj.Name), "titanium") or
+                               string.find(string.lower(obj.Name), "quartz") or
+                               string.find(string.lower(obj.Name), "diamond") or
+                               string.find(string.lower(obj.Name), "ruby") or
+                               string.find(string.lower(obj.Name), "emerald") or
+                               string.find(string.lower(obj.Name), "sapphire") or
+                               string.find(string.lower(obj.Name), "amethyst") or
+                               string.find(string.lower(obj.Name), "topaz")
+            
+            if hasOreAttribute or isNamedOre then
+                task.spawn(function()
+                    applyOreESP(obj)
+                end)
+            end
+        end
+    end
+    
+    -- Cari khusus di folder Rocks
+    local rocksFolder = Workspace:FindFirstChild("Rocks")
+    if rocksFolder then
+        for _, descendant in pairs(rocksFolder:GetDescendants()) do
+            if descendant:IsA("Model") then
+                local hasOreAttribute = descendant:GetAttribute("Ore") ~= nil
+                local isNamedOre = descendant.Name == "Ore" or 
+                                   string.find(string.lower(descendant.Name), "ore")
+                
+                if hasOreAttribute or isNamedOre then
+                    task.spawn(function()
+                        applyOreESP(descendant)
+                    end)
+                end
+            end
+        end
+    end
+    
+    print("✓ Ore scan completed")
 end
 
 -- Function untuk apply ESP pada rock
@@ -584,7 +679,6 @@ local function applyRockESP(rockModel)
     
     -- Skip jika sudah ada ESP untuk rock ini
     if RockData[rockId] then
-        print("⚠ Rock already has ESP:", rockId)
         return
     end
     
@@ -594,7 +688,6 @@ local function applyRockESP(rockModel)
         if string.find(string.lower(rockName), string.lower(rockType)) then
             foundRockType = rockType
             if config.enabled then
-                print("✓ Applying ESP to rock:", rockId, "| Type:", rockType)
                 
                 -- Initialize rock data
                 RockData[rockId] = {
@@ -614,7 +707,6 @@ local function applyRockESP(rockModel)
                         if hpData then
                             rockInfo.currentHP = hpData.currentHP
                             rockInfo.maxHP = hpData.currentHP
-                            print("✓ Initial HP for", rockId, ":", hpData.currentHP)
                             break
                         end
                         task.wait(0.5)
@@ -636,14 +728,11 @@ local function applyRockESP(rockModel)
                             rockInfo.maxHP = 750
                             rockInfo.currentHP = 750
                         end
-                        print("⚠ Using fallback HP for", rockId, ":", rockInfo.currentHP)
                     end
                     
                     -- Apply visual ESP
                     createHighlight(rockModel, Color3.fromRGB(0, 255, 0))
                     createRockLabel(rockModel, rockType, rockInfo.currentHP, rockInfo.maxHP)
-                    
-                    table.insert(ESPObjects, rockModel)
                     
                     -- Start real-time HP monitoring
                     monitorRockHP(rockModel)
@@ -651,10 +740,6 @@ local function applyRockESP(rockModel)
             end
             break
         end
-    end
-    
-    if not foundRockType then
-        print("⚠ Unknown rock type:", rockName, "| ID:", rockId)
     end
 end
 
@@ -761,16 +846,44 @@ local function setupRockDetection()
         ) then
             task.wait(0.5) -- Tunggu sebentar untuk model fully loaded
             applyRockESP(descendant)
-            
-            -- Monitor ore yang muncul di dalam rock
-            descendant.ChildAdded:Connect(function(child)
-                if child:IsA("Model") and child.Name == "Ore" then
-                    task.wait(0.2)
-                    applyOreESP(child)
-                end
-            end)
         end
     end)
+end
+
+-- Function untuk setup ore detection - DIPERBAIKI
+local function setupOreDetection()
+    print("✓ Setting up ore detection...")
+    
+    -- Scan ore yang sudah ada
+    scanExistingOres()
+    
+    -- Monitor untuk ore baru di seluruh workspace
+    Workspace.DescendantAdded:Connect(function(descendant)
+        if descendant:IsA("Model") then
+            -- Tunggu sebentar untuk memastikan model fully loaded
+            task.wait(0.2)
+            
+            -- Cek jika ini ore
+            local hasOreAttribute = descendant:GetAttribute("Ore") ~= nil
+            local isNamedOre = descendant.Name == "Ore" or 
+                               string.find(string.lower(descendant.Name), "ore")
+            
+            if hasOreAttribute or isNamedOre then
+                applyOreESP(descendant)
+            end
+        end
+    end)
+    
+    -- Monitor khusus di folder Rocks untuk ore yang muncul dari rock
+    local rocksFolder = Workspace:FindFirstChild("Rocks")
+    if rocksFolder then
+        rocksFolder.DescendantAdded:Connect(function(descendant)
+            if descendant:IsA("Model") and descendant.Name == "Ore" then
+                task.wait(0.3)
+                applyOreESP(descendant)
+            end
+        end)
+    end
 end
 
 -- Function untuk clear all ESP
@@ -790,7 +903,6 @@ local function clearAllESP()
     end
     
     -- Clear arrays
-    ESPObjects = {}
     ProcessedOres = {}
     RockData = {}
     
@@ -825,7 +937,7 @@ TeleportSection:AddLabel("Teleport Process:", true)
 TeleportSection:AddLabel("1. Goes down to Y = 10", true)
 TeleportSection:AddLabel("2. Then goes up to final Y", true)
 
--- ORE ESP TOGGLES
+-- ORE ESP TOGGLES - DIPERBAIKI
 local oreList = {
     "Cobalt", "Titanium", "Volcanic Rock", "Lapis Lazuli", "Quartz",
     "Amethyst", "Topaz", "Diamond", "Sapphire", "Cuprite",
@@ -840,6 +952,24 @@ for _, oreName in ipairs(oreList) do
         Default = false,
         Callback = function(Value)
             OreConfig[oreName].enabled = Value
+            
+            -- Jika diaktifkan, scan ore yang sudah ada
+            if Value then
+                task.spawn(function()
+                    scanExistingOres()
+                end)
+            else
+                -- Jika dinonaktifkan, hapus ESP untuk ore tersebut
+                for oreModel, _ in pairs(ProcessedOres) do
+                    if oreModel and oreModel.Parent then
+                        local detectedType = detectOreType(oreModel)
+                        if detectedType == oreName then
+                            removeESP(oreModel)
+                            ProcessedOres[oreModel] = nil
+                        end
+                    end
+                end
+            end
         end
     })
 end
@@ -1089,7 +1219,7 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
--- QUICK ACTION BUTTONS
+-- QUICK ACTION BUTTONS - DIPERBAIKI UNTUK ORE
 ActionSection:AddButton({
     Text = "Enable All Ores",
     Func = function()
@@ -1099,6 +1229,10 @@ ActionSection:AddButton({
                 Toggles["Ore_" .. oreName]:SetValue(true)
             end
         end
+        -- Scan semua ore setelah mengaktifkan semua
+        task.spawn(function()
+            scanExistingOres()
+        end)
         Library:Notify("All ores enabled!", 2)
     end,
     Tooltip = "Enable ESP for all ore types"
@@ -1113,6 +1247,13 @@ ActionSection:AddButton({
                 Toggles["Ore_" .. oreName]:SetValue(false)
             end
         end
+        -- Hapus semua ore ESP
+        for oreModel, _ in pairs(ProcessedOres) do
+            if oreModel and oreModel.Parent then
+                removeESP(oreModel)
+            end
+        end
+        ProcessedOres = {}
         Library:Notify("All ores disabled!", 2)
     end,
     Tooltip = "Disable ESP for all ore types"
@@ -1168,6 +1309,17 @@ ActionSection:AddButton({
 ActionSection:AddDivider()
 
 ActionSection:AddButton({
+    Text = "Scan All Ores",
+    Func = function()
+        scanExistingOres()
+        Library:Notify("Scanning for ores...", 2)
+    end,
+    Tooltip = "Scan for existing ores in the workspace"
+})
+
+ActionSection:AddDivider()
+
+ActionSection:AddButton({
     Text = "Clear All ESP",
     Func = clearAllESP,
     Tooltip = "Remove all ESP elements"
@@ -1186,10 +1338,10 @@ InfoSection:AddLabel("Teleport Info:", true)
 InfoSection:AddLabel("• Goes down to Y=10", true)
 InfoSection:AddLabel("• Then up to Y=48.36", true)
 InfoSection:AddDivider()
-InfoSection:AddLabel("Tips:", true)
-InfoSection:AddLabel("• Hit rocks for ESP", true)
-InfoSection:AddLabel("• Use Teleport tab", true)
-InfoSection:AddLabel("• Farm Spot is best!", true)
+InfoSection:AddLabel("Ore Detection:", true)
+InfoSection:AddLabel("• Auto-scan on enable", true)
+InfoSection:AddLabel("• Manual scan button", true)
+InfoSection:AddLabel("• Real-time detection", true)
 
 -- UI SETTINGS TAB
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
@@ -1273,6 +1425,7 @@ print("==========================================")
 
 task.wait(1)
 setupRockDetection()
+setupOreDetection()
 
 print("✓ ESP Loaded Successfully!")
 print("✓ Teleport system ready!")
